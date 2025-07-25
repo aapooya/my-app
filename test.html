@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Data Saver</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Use Inter as the default font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow-lg p-8">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Save Your Data</h1>
+            <p class="text-gray-500 mt-2">Enter three pieces of information below and save them to the cloud.</p>
+        </div>
+
+        <!-- Form for user input -->
+        <form id="dataForm" class="space-y-6">
+            <div>
+                <label for="input1" class="text-sm font-medium text-gray-700 block mb-2">First Input</label>
+                <input type="text" id="input1" name="input1" required class="w-full px-4 py-2 text-gray-800 bg-gray-100 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200" placeholder="e.g., Favorite Color">
+            </div>
+
+            <div>
+                <label for="input2" class="text-sm font-medium text-gray-700 block mb-2">Second Input</label>
+                <input type="text" id="input2" name="input2" required class="w-full px-4 py-2 text-gray-800 bg-gray-100 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200" placeholder="e.g., Favorite Food">
+            </div>
+
+            <div>
+                <label for="input3" class="text-sm font-medium text-gray-700 block mb-2">Third Input</label>
+                <input type="text" id="input3" name="input3" required class="w-full px-4 py-2 text-gray-800 bg-gray-100 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200" placeholder="e.g., Dream Destination">
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-transform transform hover:scale-105">
+                Save to Database
+            </button>
+        </form>
+
+        <!-- Status message area -->
+        <div id="statusMessage" class="mt-6 text-center text-sm font-medium"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // --- Firebase Configuration ---
+        // These global variables are provided by the environment.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : { apiKey: "DEMO_KEY", authDomain: "DEMO.firebaseapp.com", projectId: "DEMO_PROJECT" };
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        // --- Firebase Imports ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Initialization ---
+        let app, db, auth, userId;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } catch (e) {
+            console.error("Firebase initialization failed:", e);
+            document.getElementById('statusMessage').textContent = 'Error connecting to the database.';
+            document.getElementById('statusMessage').className = 'text-red-500';
+        }
+
+        // --- Authentication ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // User is signed in.
+                userId = user.uid;
+                console.log("User authenticated with UID:", userId);
+            } else {
+                // User is signed out. Attempt to sign in.
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                         await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                         await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Authentication failed:", error);
+                    document.getElementById('statusMessage').textContent = 'Authentication failed.';
+                    document.getElementById('statusMessage').className = 'text-red-500';
+                }
+            }
+        });
+
+
+        // --- DOM Elements ---
+        const dataForm = document.getElementById('dataForm');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // --- Event Listener for Form Submission ---
+        dataForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission
+
+            // Check if user is authenticated
+            if (!auth.currentUser) {
+                statusMessage.textContent = 'Not authenticated. Please wait or refresh.';
+                statusMessage.className = 'text-red-500';
+                return;
+            }
+
+            // Get form data
+            const input1 = document.getElementById('input1').value;
+            const input2 = document.getElementById('input2').value;
+            const input3 = document.getElementById('input3').value;
+
+            // Show a "saving" message
+            statusMessage.textContent = 'Saving...';
+            statusMessage.className = 'text-blue-500';
+
+            try {
+                // --- Save Data to Firestore ---
+                // Create a reference to the collection.
+                // Data is stored in a public path for this simple example.
+                const dataCollection = collection(db, `artifacts/${appId}/public/data/userInputs`);
+
+                // Add a new document with the user's input
+                const docRef = await addDoc(dataCollection, {
+                    field1: input1,
+                    field2: input2,
+                    field3: input3,
+                    savedAt: serverTimestamp(), // Add a server-side timestamp
+                    savedBy: userId // Store the user's ID
+                });
+
+                console.log("Document written with ID: ", docRef.id);
+
+                // Show success message and clear form
+                statusMessage.textContent = 'Data saved successfully!';
+                statusMessage.className = 'text-green-600';
+                dataForm.reset();
+
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                statusMessage.textContent = 'Error saving data. Please try again.';
+                statusMessage.className = 'text-red-500';
+            }
+
+            // Hide the status message after a few seconds
+            setTimeout(() => {
+                statusMessage.textContent = '';
+            }, 4000);
+        });
+    </script>
+
+</body>
+</html>
